@@ -21,12 +21,52 @@ jobs:
       CC: gcc-${{ matrix.gcc_version }}
       CXX: g++-${{ matrix.gcc_version }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: install compiler
       run: sudo apt-get install gcc-${{ matrix.gcc_version }} g++-${{ matrix.gcc_version }}
     - if: ${{ matrix.topology != 'no' }}
       run: |
         sudo apt-get install hwloc libhwloc-dev
+        hwloc-ls --version
+    - name: build qthreads
+      run: |
+        mkdir build
+        cd build
+        cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
+        make -j2 VERBOSE=1
+    - name: run tests
+      run: |
+        cd build
+        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
+      timeout-minutes: 13
+
+  # GitHub actions doesn't provide ubuntu 25.04 or 26.04 runners, but we want to test
+  # with gcc 15 which is not available on 24.04. We don't need to do the thorough
+  # run with 15 though, since we're already doing those extra builds with gcc 16.
+  linux-gcc-15:
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    continue-on-error: true
+    strategy:
+      matrix:
+        scheduler: [nemesis, sherwood, distrib]
+        topology: [hwloc, binders, no]
+    env:
+      CC: gcc-15
+      CXX: g++-15
+    steps:
+    - uses: actions/checkout@v6
+    - name: container prerequisites
+      run: |
+        # some additional setup steps are only needed when running in a container.
+        # These end up being no-ops in the github actions images.
+        apt-get update
+        apt-get install -y sudo wget software-properties-common cmake
+    - run: |
+        sudo apt-get install -y gcc-15 g++-15
+    - if: ${{ matrix.topology != 'no' }}
+      run: |
+        sudo apt-get install -y hwloc libhwloc-dev
         hwloc-ls --version
     - name: build qthreads
       run: |
@@ -70,7 +110,7 @@ jobs:
       CC: clang-${{ matrix.clang_version }}
       CXX: clang++-${{ matrix.clang_version }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: container prerequisites
       run: |
         # some additional setup steps are only needed when running in a container.
@@ -119,7 +159,7 @@ jobs:
       CC: icx
       CXX: icpx
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - if: ${{ matrix.topology != 'no' }}
       run: |
         sudo apt-get install hwloc libhwloc-dev
@@ -161,7 +201,7 @@ jobs:
       CFLAGS: "-diag-disable=10441"
       CXXFLAGS: "-diag-disable=10441"
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - if: ${{ matrix.topology != 'no' }}
       run: |
         sudo apt-get install hwloc libhwloc-dev
@@ -201,7 +241,7 @@ jobs:
       CC: clang
       CXX: clang++
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - if: ${{ matrix.topology != 'no' }}
       run: |
         sudo apt-get install hwloc libhwloc-dev
@@ -242,7 +282,7 @@ jobs:
     env:
       QTHREADS_ENABLE_ASSERTS: ${{ matrix.use_asserts && '--enable-asserts' || '' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: install deps
       run: |
         brew install coreutils # coreutils is to get gtimeout for CI and is not universally required by qthreads.
@@ -272,7 +312,7 @@ jobs:
 
   sanitizers:
     runs-on: ubuntu-24.04
-    container: ubuntu:25.04
+    container: ubuntu:26.04
     continue-on-error: true
     strategy:
       matrix:
@@ -302,7 +342,7 @@ jobs:
       QTHREAD_STACK_SIZE: 2097152
       ASAN_OPTIONS: "check_initialization_order=1"
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: container prerequisites
       run: |
         # some additional setup steps are only needed when running in a container.
@@ -311,11 +351,12 @@ jobs:
         apt-get install -y sudo wget software-properties-common cmake
     - if:  ${{ ! matrix.use_libcxx }}
       run: |
-        sudo apt-get install -y gcc-15 g++-15
+        sudo apt-get install -y gcc-16 g++-16
     - name: install compiler
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-        sudo apt-add-repository 'deb https://apt.llvm.org/plucky/ llvm-toolchain-plucky-22 main' && break || sleep 1
+        # No current LLVM apt repo for 26.04 (resolute racoon) yet, so just pull in the previous version
+        sudo apt-add-repository 'deb https://apt.llvm.org/questing/ llvm-toolchain-questing-22 main' && break || sleep 1
         sudo apt-get install -y clang-22
     - if: ${{ matrix.use_libcxx }}
       run: sudo apt-get install -y libc++-22-dev libc++abi-22-dev
@@ -338,7 +379,7 @@ jobs:
 
   linux-thorough:
     runs-on: ubuntu-24.04
-    container: ubuntu:25.04
+    container: ubuntu:26.04
     continue-on-error: true
     strategy:
       matrix:
@@ -351,12 +392,12 @@ jobs:
           - compiler: gcc
             use_libcxx: true
     env:
-      CC: ${{ matrix.compiler == 'gcc' && 'gcc-15' || 'clang-22' }}
-      CXX: ${{ matrix.compiler == 'gcc' && 'g++-15' || 'clang++-22' }}
+      CC: ${{ matrix.compiler == 'gcc' && 'gcc-16' || 'clang-22' }}
+      CXX: ${{ matrix.compiler == 'gcc' && 'g++-16' || 'clang++-22' }}
       CXXFLAGS: ${{ matrix.use_libcxx && '-stdlib=libc++' || '' }}
       QTHREADS_ENABLE_ASSERTS: ${{ matrix.use_asserts && '--enable-asserts' || '' }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: container prerequisites
       run: |
         # some additional setup steps are only needed when running in a container.
@@ -364,11 +405,12 @@ jobs:
         apt-get update
         apt-get install -y sudo wget software-properties-common cmake
     - run: |
-        sudo apt-get install -y gcc-15 g++-15
+        sudo apt-get install -y gcc-16 g++-16
     - if: ${{ matrix.compiler == 'clang' }}
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-        sudo apt-add-repository 'deb https://apt.llvm.org/plucky/ llvm-toolchain-plucky-22 main' && break || sleep 1
+        # No current LLVM apt repo for 26.04 (resolute racoon) yet, so just pull in the previous version
+        sudo apt-add-repository 'deb https://apt.llvm.org/questing/ llvm-toolchain-questing-22 main' && break || sleep 1
         sudo apt-get install -y clang-22
     - if: ${{ matrix.use_libcxx }}
       run: sudo apt-get install -y libc++-22-dev libc++abi-22-dev
@@ -395,9 +437,9 @@ jobs:
       CC: 'clang-22'
       CXX: 'clang++-22'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - run: |
-        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add - && break || sleep 1
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
         sudo apt-add-repository 'deb https://apt.llvm.org/noble/ llvm-toolchain-noble-22 main' && break || sleep 1
         sudo apt-get install clang-format-22
     - name: check formatting
