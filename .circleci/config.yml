@@ -8,26 +8,25 @@ jobs:
         type: string
       topology:
         type: string
-    #machine:
-    #  image: ubuntu-2504:edge
     docker:
-      - image: ubuntu:25.04
+      - image: ubuntu:26.04
     resource_class: arm.medium
     environment:
-      CC: gcc-15
-      CXX: g++-15
+      CC: gcc-16
+      CXX: g++-16
     steps:
       - run: |
           apt-get update --quiet=2 || apt-get update --quiet=2 || apt-get update --quiet=2
-          apt-get install -y sudo
-          sudo apt-get install -y git # Updating and installing sudo and git is only neccesary in a container.
-          # Installing sudo is just so that the later commands using sudo can be the same whether in a container or not.
+          # tzdata is required by a bunch of other stuff and has to be installed carefully to avoid user prompts stalling the script.
+          ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tzdata
+          apt-get install -y git
           export REPO_HTTPS=`echo "$CIRCLE_REPOSITORY_URL" | sed "s|git@github.com:|https://github.com/|g"`
           git clone -b "$CIRCLE_BRANCH" "$REPO_HTTPS" . --depth=1
       - run: |
-          sudo apt-get install -y gcc-15 g++-15
-          sudo apt-get install -y cmake
-          sudo apt-get install -y hwloc libhwloc-dev
+          apt-get install -y gcc-16 g++-16
+          apt-get install -y cmake
+          apt-get install -y hwloc libhwloc-dev
       - run: |
           mkdir build
           cd build
@@ -45,33 +44,29 @@ jobs:
         type: string
       topology:
         type: string
-    #machine:
-    #  image: ubuntu-2504:edge
     docker:
-      - image: ubuntu:25.04
+      - image: ubuntu:26.04
     resource_class: arm.medium
     environment:
-      CC: clang-21
-      CXX: clang++-21
+      CC: clang-22
+      CXX: clang++-22
     steps:
       - run: |
           apt-get update --quiet=2 || apt-get update --quiet=2 || apt-get update --quiet=2
-          apt-get install -y sudo
-          sudo apt-get install -y git # Updating and installing sudo and git is only neccesary in a container.
-          # Installing sudo is just so that the later commands using sudo can be the same whether in a container or not.
+          # tzdata is required by a bunch of other stuff and has to be installed carefully to avoid user prompts stalling the script.
+          ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tzdata
+          apt-get install -y git
           export REPO_HTTPS=`echo "$CIRCLE_REPOSITORY_URL" | sed "s|git@github.com:|https://github.com/|g"`
           git clone -b "$CIRCLE_BRANCH" "$REPO_HTTPS" . --depth=1
       - run: |
-          # tzdata is required by clang and software-properties-common and has to be installed carefully to avoid user prompts stalling the script.
-          ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends tzdata
-          sudo apt-get install -y wget software-properties-common # Only needed in container.
-          sudo apt-get install -y gcc-15 g++-15
-          sudo apt-get install -y cmake
-          sudo apt-get install -y hwloc libhwloc-dev
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo apt-add-repository -y 'deb https://apt.llvm.org/plucky/ llvm-toolchain-plucky-21 main'
-          sudo apt-get install -y clang-21
+          apt-get install -y wget software-properties-common
+          apt-get install -y gcc-16 g++-16
+          apt-get install -y cmake
+          apt-get install -y hwloc libhwloc-dev
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          apt-add-repository -y 'deb https://apt.llvm.org/questing/ llvm-toolchain-questing-22 main'
+          apt-get install -y clang-22
       - run: |
           mkdir build
           cd build
@@ -91,14 +86,12 @@ jobs:
         type: string
       sanitizer:
         type: string
-    #machine:
-    #  image: ubuntu-2504:edge
     docker:
-      - image: ubuntu:25.04
+      - image: ubuntu:26.04
     resource_class: arm.medium
     environment:
-      CC: clang-21
-      CXX: clang++-21
+      CC: clang-22
+      CXX: clang++-22
       CFLAGS: "-fsanitize=<< parameters.sanitizer >> -fno-sanitize-recover=all"
       CXXFLAGS: "-fsanitize=<< parameters.sanitizer >> -fno-sanitize-recover=all"
       LDFLAGS: "-fsanitize=<< parameters.sanitizer >> -fno-sanitize-recover=all"
@@ -107,22 +100,20 @@ jobs:
     steps:
       - run: |
           apt-get update --quiet=2 || apt-get update --quiet=2 || apt-get update --quiet=2
-          apt-get install -y sudo
-          sudo apt-get install -y git # Updating and installing sudo and git is only neccesary in a container.
-          # Installing sudo is just so that the later commands using sudo can be the same whether in a container or not.
+          # tzdata is required by a bunch of other stuff and has to be installed carefully to avoid user prompts stalling the script.
+          ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tzdata
+          apt-get install -y git
           export REPO_HTTPS=`echo "$CIRCLE_REPOSITORY_URL" | sed "s|git@github.com:|https://github.com/|g"`
           git clone -b "$CIRCLE_BRANCH" "$REPO_HTTPS" . --depth=1
       - run: |
-          # tzdata is required by clang and software-properties-common and has to be installed carefully to avoid user prompts stalling the script.
-          ln -fs /usr/share/zoneinfo/America/New_York /etc/localtime
-          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends tzdata
-          sudo apt-get install -y wget software-properties-common # Only needed in container.
-          sudo apt-get install -y gcc-15 g++-15
-          sudo apt-get install -y cmake
-          sudo apt-get install -y hwloc libhwloc-dev
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-          sudo apt-add-repository -y 'deb https://apt.llvm.org/plucky/ llvm-toolchain-plucky-21 main'
-          sudo apt-get install -y clang-21
+          apt-get install -y wget software-properties-common
+          apt-get install -y gcc-16 g++-16
+          apt-get install -y cmake
+          apt-get install -y hwloc libhwloc-dev
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          apt-add-repository -y 'deb https://apt.llvm.org/questing/ llvm-toolchain-questing-22 main'
+          apt-get install -y clang-22
       - run: |
           mkdir build
           cd build
