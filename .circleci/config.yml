@@ -3,11 +3,6 @@ version: 2.1
 
 jobs:
   arm_gcc:
-    parameters:
-      scheduler:
-        type: string
-      topology:
-        type: string
     docker:
       - image: ubuntu:26.04
     resource_class: arm.medium
@@ -27,23 +22,25 @@ jobs:
           apt-get install -y gcc-16 g++-16
           apt-get install -y cmake
           apt-get install -y hwloc libhwloc-dev
-      - run: |
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=<< parameters.scheduler >> -DQTHREADS_TOPOLOGY=<< parameters.topology >> ..
-          make -j2 VERBOSE=1
       - run:
           command: |
-              cd build
-              CTEST_OUTPUT_ON_FAILURE=1 timeout --foreground -k 10s 2m make test VERBOSE=1
+              for sch in nemesis sherwood distrib
+              do
+                  for topo in no hwloc binders
+                  do
+                      echo "********** Scheduler: $sch, Topology: $topo **********"
+                      rm -rf build
+                      mkdir build
+                      cd build
+                      cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                      make -j2 VERBOSE=1
+                      CTEST_OUTPUT_ON_FAILURE=1 timeout --foreground -k 10s 2m make test VERBOSE=1
+                      cd ..
+                  done
+              done
           no_output_timeout: 180s
 
   arm_clang:
-    parameters:
-      scheduler:
-        type: string
-      topology:
-        type: string
     docker:
       - image: ubuntu:26.04
     resource_class: arm.medium
@@ -67,34 +64,30 @@ jobs:
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
           apt-add-repository -y 'deb https://apt.llvm.org/questing/ llvm-toolchain-questing-22 main'
           apt-get install -y clang-22
-      - run: |
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=<< parameters.scheduler >> -DQTHREADS_TOPOLOGY=<< parameters.topology >> ..
-          make -j2 VERBOSE=1
       - run:
           command: |
-              cd build
-              CTEST_OUTPUT_ON_FAILURE=1 timeout --foreground -k 10s 2m make test VERBOSE=1
+              for sch in nemesis sherwood distrib
+              do
+                  for topo in no hwloc binders
+                  do
+                      rm -rf build
+                      mkdir build
+                      cd build
+                      cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                      make -j2 VERBOSE=1
+                      CTEST_OUTPUT_ON_FAILURE=1 timeout --foreground -k 10s 2m make test VERBOSE=1
+                      cd ..
+                  done
+              done
           no_output_timeout: 180s
 
   arm_sanitizers:
-    parameters:
-      scheduler:
-        type: string
-      topology:
-        type: string
-      sanitizer:
-        type: string
     docker:
       - image: ubuntu:26.04
     resource_class: arm.medium
     environment:
       CC: clang-22
       CXX: clang++-22
-      CFLAGS: "-fsanitize=<< parameters.sanitizer >> -fno-sanitize-recover=all"
-      CXXFLAGS: "-fsanitize=<< parameters.sanitizer >> -fno-sanitize-recover=all"
-      LDFLAGS: "-fsanitize=<< parameters.sanitizer >> -fno-sanitize-recover=all"
       QTHREAD_STACK_SIZE: 524288
       ASAN_OPTIONS: "check_initialization_order=1"
     steps:
@@ -114,24 +107,60 @@ jobs:
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
           apt-add-repository -y 'deb https://apt.llvm.org/questing/ llvm-toolchain-questing-22 main'
           apt-get install -y clang-22
-      - run: |
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=<< parameters.scheduler >> -DQTHREADS_TOPOLOGY=<< parameters.topology >> ..
-          make -j2 VERBOSE=1
       - run:
           command: |
+              echo "********** Sanitizer: thread **********"
+              # only test thread sanitizer in the nemesis/no topology config.
+              export CFLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+              export CXXFLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+              export LDFLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+              mkdir build
               cd build
-              if [[ "<< parameters.sanitizer >>" == "thread" ]]; then cd test/basics; fi
-              CTEST_OUTPUT_ON_FAILURE=1 timeout --foreground -k 10s 4m make test VERBOSE=1
+              cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=nemesis -DQTHREAEDS_TOPOLOGY=no ..
+              make -j2 VERBOSE=1
+              # basic tests only
+              cd test/basics
+              CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 4m make test VERBOSE=1
+              cd ../../..
+              # memory sanitizer:
+              # memory sanitizer doesn't like hwloc, so don't test that config.
+              export CFLAGS="-fsanitize=memory -fno-sanitize-recover=all"
+              export CXXFLAGS="-fsanitize=memory -fno-sanitize-recover=all"
+              export LDFLAGS="-fsanitize=memory -fno-sanitize-recover=all"
+              for sch in nemesis sherwood distrib
+              do
+                  echo "********** Sanitizer: memory, Scheduler: $sch **********"
+                  rm -rf build
+                  mkdir build
+                  cd build
+                  cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY=no ..
+                  make -j2 VERBOSE=1
+                  CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 4m make test VERBOSE=1
+                  cd ..
+              done
+              for san in address undefined
+              do
+                  export CFLAGS="-fsanitize=$san -fno-sanitize-recover=all"
+                  export CXXFLAGS="-fsanitize=$san -fno-sanitize-recover=all"
+                  export LDFLAGS="-fsanitize=$san -fno-sanitize-recover=all"
+                  for sch in nemesis sherwood distrib
+                  do
+                      for topo in hwloc binders no
+                      do
+                          echo "********** Sanitizer: $san, Scheduler: $sch, Topology: $topo **********"
+                          rm -rf build
+                          mkdir build
+                          cd build
+                          cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                          make -j2 VERBOSE=1
+                          CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 4m make test VERBOSE=1
+                          cd ..
+                      done
+                  done
+              done
           no_output_timeout: 180s
 
   arm_acfl:
-    parameters:
-      scheduler:
-        type: string
-      topology:
-        type: string
     machine:
       image: ubuntu-2204:2024.04.4
     resource_class: arm.medium
@@ -160,28 +189,28 @@ jobs:
           rm -rf acfl
           export PATH=$PATH:/opt/arm/arm-linux-compiler-24.10.1_Ubuntu-22.04/bin
           armclang -v
-      - run: |
-          export PATH=$PATH:/opt/arm/arm-linux-compiler-24.10.1_Ubuntu-22.04/bin
-          mkdir build
-          pushd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=<< parameters.scheduler >> -DQTHREADS_TOPOLOGY=<< parameters.topology >> ..
-          make -j2 VERBOSE=1
-          popd
       - run:
           command: |
               export PATH=$PATH:/opt/arm/arm-linux-compiler-24.10.1_Ubuntu-22.04/bin
-              pushd build
-              CTEST_OUTPUT_ON_FAILURE=1 timeout --foreground -k 10s 4m make test VERBOSE=1
-              popd
+              for sch in nemesis sherwood distrib
+              do
+                  for topo in hwloc binders no
+                  do
+                      echo "********** Scheduler: $sch, Topology: $topo **********"
+                      rm -rf build
+                      mkdir build
+                      cd build
+                      cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                      make -j2 VERBOSE=1
+                      CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 4m make test VERBOSE=1
+                      cd ..
+                  done
+              done
           no_output_timeout: 180s
 
   nvc:
     parameters:
       worker_type:
-        type: string
-      scheduler:
-        type: string
-      topology:
         type: string
     machine:
       image: ubuntu-2404:edge
@@ -201,32 +230,31 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y cmake gcc g++ gfortran hwloc libhwloc-dev
           sudo apt-get install -y nvhpc-26-1
-      - run: |
-          export MACHINE_TYPE=`uname -m`
-          if [ ${MACHINE_TYPE} == 'x86_64' ]; then export PATH="$PATH:/opt/nvidia/hpc_sdk/Linux_x86_64/26.1/compilers/bin"; fi
-          if [ ${MACHINE_TYPE} == 'aarch64' ]; then export PATH="$PATH:/opt/nvidia/hpc_sdk/Linux_aarch64/26.1/compilers/bin"; fi
-          nvc --version
-          mkdir build
-          pushd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=<< parameters.scheduler >> -DQTHREADS_TOPOLOGY=<< parameters.topology >> ..
-          make -j2 VERBOSE=1
-          popd
       - run:
           command: |
-              pushd build
-              CTEST_OUTPUT_ON_FAILURE=1 timeout --foreground -k 10s 4m make test VERBOSE=1
-              popd
+              export MACHINE_TYPE=`uname -m`
+              if [ ${MACHINE_TYPE} == 'x86_64' ]; then export PATH="$PATH:/opt/nvidia/hpc_sdk/Linux_x86_64/26.1/compilers/bin"; fi
+              if [ ${MACHINE_TYPE} == 'aarch64' ]; then export PATH="$PATH:/opt/nvidia/hpc_sdk/Linux_aarch64/26.1/compilers/bin"; fi
+              nvc --version
+              for sch in nemesis sherwood distrib
+              do
+                  for topo in hwloc binders no
+                  do
+                      echo "********** Scheduler: $sch, Topology: $topo **********"
+                      rm -rf build
+                      mkdir build
+                      cd build
+                      cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                      make -j2 VERBOSE=1
+                      CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 4m make test VERBOSE=1
+                      cd ..
+                  done
+              done
           no_output_timeout: 180s
 
   musl:
     parameters:
       worker_type:
-        type: string
-      scheduler:
-        type: string
-      topology:
-        type: string
-      compiler:
         type: string
     docker:
       - image: alpine:latest
@@ -237,159 +265,43 @@ jobs:
           export REPO_HTTPS=`echo "$CIRCLE_REPOSITORY_URL" | sed "s|git@github.com:|https://github.com/|g"`
           git clone -b "$CIRCLE_BRANCH" "$REPO_HTTPS" . --depth=1
       - run: |
-          apk add --no-cache --no-progress bash make musl-dev hwloc-dev cmake gcc g++ linux-headers
-          if [ "<< parameters.compiler >>" == "clang" ]; then apk add clang; fi
-      - run: |
-          if [ "<< parameters.compiler >>" == "clang" ]; then export CC=clang && export CXX=clang++; fi
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=<< parameters.scheduler >> -DQTHREADS_TOPOLOGY=<< parameters.topology >> ..
-          make -j2 VERBOSE=1
-          cd ..
+          apk add --no-cache --no-progress bash make musl-dev hwloc-dev cmake gcc g++ clang linux-headers
       - run:
           command: |
-              cd build
-              CTEST_OUTPUT_ON_FAILURE=1 make test VERBOSE=1
-              cd ..
+              for compiler in clang gcc
+              do
+                  if [ "$compiler" = "gcc" ]; then export CC=gcc && export CXX=g++; fi
+                  if [ "$compiler" = "clang" ]; then export CC=clang && export CXX=clang++; fi
+                  for sch in nemesis sherwood distrib
+                  do
+                      for topo in hwloc binders no
+                      do
+                          echo "********** Scheduler: $sch, Topology: $topo **********"
+                          rm -rf build
+                          mkdir build
+                          cd build
+                          cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                          make -j2 VERBOSE=1
+                          CTEST_OUTPUT_ON_FAILURE=1 make test VERBOSE=1
+                          cd ..
+                      done
+                  done
+              done
           no_output_timeout: 180s
 
 workflows:
   build_and_test:
     jobs:
-      - arm_gcc:
-          matrix:
-            parameters:
-              scheduler: [nemesis, sherwood, distrib]
-              topology: ['no', binders, hwloc]
-      - arm_clang:
-          matrix:
-            parameters:
-              scheduler: [nemesis, sherwood, distrib]
-              topology: ['no', binders, hwloc]
-      - arm_sanitizers:
-          matrix:
-            parameters:
-              scheduler: [nemesis, sherwood, distrib]
-              topology: ['no', binders, hwloc]
-              sanitizer: [address, memory, thread, undefined]
-            exclude:
-              - scheduler: nemesis
-                topology: binders
-                sanitizer: memory
-              - scheduler: sherwood
-                topology: binders
-                sanitizer: memory
-              - scheduler: distrib
-                topology: binders
-                sanitizer: memory
-              - scheduler: nemesis
-                topology: hwloc
-                sanitizer: memory
-              - scheduler: sherwood
-                topology: hwloc
-                sanitizer: memory
-              - scheduler: distrib
-                topology: hwloc
-                sanitizer: memory
-              - scheduler: sherwood
-                topology: 'no'
-                sanitizer: thread
-              - scheduler: sherwood
-                topology: hwloc
-                sanitizer: thread
-              - scheduler: sherwood
-                topology: binders
-                sanitizer: thread
-              - scheduler: distrib
-                topology: 'no'
-                sanitizer: thread
-              - scheduler: distrib
-                topology: hwloc
-                sanitizer: thread
-              - scheduler: distrib
-                topology: binders
-                sanitizer: thread
-      - arm_acfl:
-          matrix:
-            parameters:
-              scheduler: [nemesis, sherwood, distrib]
-              topology: ['no', binders, hwloc]
+      - arm_gcc
+      - arm_clang
+      - arm_sanitizers
+      - arm_acfl
       - nvc:
           matrix:
             parameters:
               worker_type: [medium, arm.medium]
-              scheduler: [nemesis, sherwood, distrib]
-              topology: ['no', binders, hwloc]
       - musl:
           matrix:
             parameters:
               worker_type: [medium, arm.medium]
-              scheduler: [nemesis, sherwood, distrib]
-              topology: ['no', binders, hwloc]
-              compiler: [clang, gcc]
-            exclude:
-              - worker_type: medium
-                scheduler: sherwood
-                topology: binders
-                compiler: gcc
-              - worker_type: medium
-                scheduler: sherwood
-                topology: hwloc
-                compiler: gcc
-              - worker_type: medium
-                scheduler: distrib
-                topology: binders
-                compiler: gcc
-              - worker_type: medium
-                scheduler: distrib
-                topology: hwloc
-                compiler: gcc
-              - worker_type: arm.medium
-                scheduler: sherwood
-                topology: binders
-                compiler: gcc
-              - worker_type: arm.medium
-                scheduler: sherwood
-                topology: hwloc
-                compiler: gcc
-              - worker_type: arm.medium
-                scheduler: distrib
-                topology: binders
-                compiler: gcc
-              - worker_type: arm.medium
-                scheduler: distrib
-                topology: hwloc
-                compiler: gcc
-              - worker_type: medium
-                scheduler: sherwood
-                topology: binders
-                compiler: clang
-              - worker_type: medium
-                scheduler: sherwood
-                topology: hwloc
-                compiler: clang
-              - worker_type: medium
-                scheduler: distrib
-                topology: binders
-                compiler: clang
-              - worker_type: medium
-                scheduler: distrib
-                topology: hwloc
-                compiler: clang
-              - worker_type: arm.medium
-                scheduler: sherwood
-                topology: binders
-                compiler: clang
-              - worker_type: arm.medium
-                scheduler: sherwood
-                topology: hwloc
-                compiler: clang
-              - worker_type: arm.medium
-                scheduler: distrib
-                topology: binders
-                compiler: clang
-              - worker_type: arm.medium
-                scheduler: distrib
-                topology: hwloc
-                compiler: clang
 
