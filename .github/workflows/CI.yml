@@ -15,30 +15,33 @@ jobs:
     strategy:
       matrix:
         gcc_version: [9, 10, 11, 12, 13, 14]
-        scheduler: [nemesis, sherwood, distrib]
-        topology: [hwloc, binders, no]
     env:
       CC: gcc-${{ matrix.gcc_version }}
       CXX: g++-${{ matrix.gcc_version }}
     steps:
     - uses: actions/checkout@v6
     - name: install compiler
-      run: sudo apt-get install gcc-${{ matrix.gcc_version }} g++-${{ matrix.gcc_version }}
-    - if: ${{ matrix.topology != 'no' }}
       run: |
+        sudo apt-get install gcc-${{ matrix.gcc_version }} g++-${{ matrix.gcc_version }}
         sudo apt-get install hwloc libhwloc-dev
         hwloc-ls --version
-    - name: build qthreads
+    - name: build and test
       run: |
-        mkdir build
-        cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
-        make -j2 VERBOSE=1
-    - name: run tests
-      run: |
-        cd build
-        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
-      timeout-minutes: 13
+        for sch in nemesis sherwood distrib
+        do
+            for topo in hwloc binders no
+            do
+                echo "********** Scheduler: $sch, Topology: $topo **********"
+                rm -rf build
+                mkdir build
+                cd build
+                cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                make -j2 VERBOSE=1
+                CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
+                cd ..
+            done
+        done
+      timeout-minutes: 30
 
   # GitHub actions doesn't provide ubuntu 25.04 or 26.04 runners, but we want to test
   # with gcc 15 which is not available on 24.04. We don't need to do the thorough
@@ -47,10 +50,6 @@ jobs:
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     continue-on-error: true
-    strategy:
-      matrix:
-        scheduler: [nemesis, sherwood, distrib]
-        topology: [hwloc, binders, no]
     env:
       CC: gcc-15
       CXX: g++-15
@@ -64,21 +63,25 @@ jobs:
         apt-get install -y sudo wget software-properties-common cmake
     - run: |
         sudo apt-get install -y gcc-15 g++-15
-    - if: ${{ matrix.topology != 'no' }}
-      run: |
         sudo apt-get install -y hwloc libhwloc-dev
         hwloc-ls --version
-    - name: build qthreads
+    - name: build and test
       run: |
-        mkdir build
-        cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
-        make -j2 VERBOSE=1
-    - name: run tests
-      run: |
-        cd build
-        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
-      timeout-minutes: 13
+        for sch in nemesis sherwood distrib
+        do
+            for topo in hwloc binders no
+            do
+                echo "********** Scheduler: $sch, Topology: $topo **********"
+                rm -rf build
+                mkdir build
+                cd build
+                cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                make -j2 VERBOSE=1
+                CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
+                cd ..
+            done
+        done
+      timeout-minutes: 40
 
   linux-clang:
     runs-on: ubuntu-24.04
@@ -86,9 +89,7 @@ jobs:
     continue-on-error: true
     strategy:
       matrix:
-        clang_version: [14, 15, 16, 17, 18, 19, 20, 21] # skip 16, see below.
-        scheduler: [nemesis, sherwood, distrib]
-        topology: [hwloc, binders, no]
+        clang_version: [14, 15, 16, 17, 18, 19, 20, 21]
         include:
           - clang_version: 14
             gcc_version: 11
@@ -119,8 +120,12 @@ jobs:
         apt-get install -y sudo wget software-properties-common cmake
     - name: install gcc
       run: sudo apt-get install -y gcc-${{ matrix.gcc_version }} g++-${{ matrix.gcc_version }}
+    - run: |
+        sudo apt-get install -y hwloc libhwloc-dev
+        hwloc-ls --version
     - if: ${{ matrix.clang_version == '16' }}
       run: |
+        # We can get away with using an older package source for llvm 16.
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
         sudo apt-add-repository 'deb https://apt.llvm.org/jammy/ llvm-toolchain-jammy-16 main' && break || sleep 1
     - if: ${{ matrix.clang_version == '21' }}
@@ -129,39 +134,36 @@ jobs:
         sudo apt-add-repository 'deb https://apt.llvm.org/plucky/ llvm-toolchain-plucky-21 main' && break || sleep 1
     - name: install clang
       run: sudo apt-get install -y clang-${{ matrix.clang_version }}
-    - if: ${{ matrix.topology != 'no' }}
+    - name: build and test
       run: |
-        sudo apt-get install -y hwloc libhwloc-dev
-        hwloc-ls --version
-    - name: build qthreads
-      run: |
-        mkdir build
-        cd build
-        # apt gets confused when we bring an older package forward like this so
-        # we ultimately end up having to point clang to the right installation location.
+        # apt gets confused when we bring an older package forward like we do for clang-16.
+        # We ultimately end up having to point clang to the right installation location.
         if [ "${{ matrix.clang_version }}" = "16" ]; then export CXXFLAGS="--gcc-install-dir=/lib/gcc/x86_64-linux-gnu/${{ matrix.gcc_version }}"; fi
-        cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
-        make -j2 VERBOSE=1
-    - name: run tests
-      run: |
-        cd build
-        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
-      timeout-minutes: 13
+        for sch in nemesis sherwood distrib
+        do
+            for topo in hwloc binders no
+            do
+                echo "********** Scheduler: $sch, Topology: $topo **********"
+                rm -rf build
+                mkdir build
+                cd build
+                cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                make -j2 VERBOSE=1
+                CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
+                cd ..
+            done
+        done
+      timeout-minutes: 40
 
   linux-icx:
     runs-on: ubuntu-24.04
     continue-on-error: true
-    strategy:
-      matrix:
-        scheduler: [nemesis, sherwood, distrib]
-        topology: [hwloc, binders, no]
     env:
       CC: icx
       CXX: icpx
     steps:
     - uses: actions/checkout@v6
-    - if: ${{ matrix.topology != 'no' }}
-      run: |
+    - run: |
         sudo apt-get install hwloc libhwloc-dev
         hwloc-ls --version
     - name: install gcc
@@ -174,27 +176,28 @@ jobs:
         sudo apt-get install intel-oneapi-compiler-dpcpp-cpp-2025.3
         source /opt/intel/oneapi/setvars.sh
         icx -v
-    - name: build qthreads
+    - name: build and test
       run: |
         source /opt/intel/oneapi/setvars.sh
-        mkdir build
-        cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
-        make -j2 VERBOSE=1
-    - name: run tests
-      run: |
-        cd build
-        source /opt/intel/oneapi/setvars.sh
-        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
-      timeout-minutes: 13
+        for sch in nemesis sherwood distrib
+        do
+            for topo in hwloc binders no
+            do
+                echo "********** Scheduler: $sch, Topology: $topo **********"
+                rm -rf build
+                mkdir build
+                cd build
+                cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                make -j2 VERBOSE=1
+                CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
+                cd ..
+            done
+        done
+      timeout-minutes: 40
 
   linux-icc:
     runs-on: ubuntu-22.04
     continue-on-error: true
-    strategy:
-      matrix:
-        scheduler: [nemesis, sherwood, distrib]
-        topology: [hwloc, binders, no]
     env:
       CC: icc
       CXX: icpc
@@ -202,8 +205,7 @@ jobs:
       CXXFLAGS: "-diag-disable=10441"
     steps:
     - uses: actions/checkout@v6
-    - if: ${{ matrix.topology != 'no' }}
-      run: |
+    - run: |
         sudo apt-get install hwloc libhwloc-dev
         hwloc-ls --version
     - name: install gcc
@@ -216,34 +218,34 @@ jobs:
         sudo apt-get install intel-oneapi-compiler-dpcpp-cpp-and-cpp-classic-2023.2.4
         source /opt/intel/oneapi/setvars.sh
         icc -v
-    - name: build qthreads
+    - name: build and test
       run: |
         source /opt/intel/oneapi/setvars.sh
-        mkdir build
-        cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
-        make -j2 VERBOSE=1
-    - name: run tests
-      run: |
-        cd build
-        source /opt/intel/oneapi/setvars.sh
-        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
-      timeout-minutes: 13
+        for sch in nemesis sherwood distrib
+        do
+            for topo in hwloc binders no
+            do
+                echo "********** Scheduler: $sch, Topology: $topo **********"
+                rm -rf build
+                mkdir build
+                cd build
+                cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                make -j2 VERBOSE=1
+                CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
+                cd ..
+            done
+        done
+      timeout-minutes: 40
 
   linux-aocc:
     runs-on: ubuntu-24.04
     continue-on-error: true
-    strategy:
-      matrix:
-        scheduler: [nemesis, sherwood, distrib]
-        topology: [hwloc, binders, no]
     env:
       CC: clang
       CXX: clang++
     steps:
     - uses: actions/checkout@v6
-    - if: ${{ matrix.topology != 'no' }}
-      run: |
+    - run: |
         sudo apt-get install hwloc libhwloc-dev
         hwloc-ls --version
     - name: install gcc
@@ -255,90 +257,79 @@ jobs:
         sudo apt install -y ./aocc.deb
         source /opt/AMD/aocc-compiler-5.1.0/setenv_AOCC.sh
         clang -v
-    - name: build qthreads
+    - name: build and test
       run: |
-        mkdir build
-        cd build
         source /opt/AMD/aocc-compiler-5.1.0/setenv_AOCC.sh
-        cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
-        make -j2 VERBOSE=1
-    - name: run tests
-      run: |
-        cd build
-        source /opt/AMD/aocc-compiler-5.1.0/setenv_AOCC.sh
-        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
-      timeout-minutes: 13
+        for sch in nemesis sherwood distrib
+        do
+            for topo in hwloc binders no
+            do
+                echo "********** Scheduler: $sch, Topology: $topo **********"
+                rm -rf build
+                mkdir build
+                cd build
+                cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                make -j2 VERBOSE=1
+                CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
+                cd ..
+            done
+        done
+      timeout-minutes: 40
 
   mac:
     continue-on-error: true
     strategy:
       matrix:
         image: [macos-15, macos-15-intel] # Test on both ARM and X86 (through fall 2027)
-        scheduler: [nemesis, sherwood, distrib]
-        topology: [hwloc, binders, no]
-        build_type: [Release, Debug]
-        compiler: [gcc, clang]
     runs-on: ${{ matrix.image }}
-    env:
-      QTHREADS_ENABLE_ASSERTS: ${{ matrix.use_asserts && '--enable-asserts' || '' }}
     steps:
     - uses: actions/checkout@v6
     - name: install deps
       run: |
         brew install coreutils # coreutils is to get gtimeout for CI and is not universally required by qthreads.
-        if [[ "${{ matrix.compiler }}" == "gcc" ]]; then brew install gcc; fi
-    - if: ${{ matrix.topology != 'no' }}
-      run: |
+        brew install gcc
+    - run: |
         brew install hwloc
         hwloc-ls --version
-    - name: build qthreads
+    - name: build and test
       run: |
-        if [[ "${{ matrix.compiler }}" == "gcc" ]]; then export CC=gcc && export CXX=g++ ; fi
         export CFLAGS="-I$(brew --prefix)/include $CFLAGS"
         export CXXFLAGS="-I$(brew --prefix)/include $CXXFLAGS"
         export LDFLAGS="-L$(brew --prefix)/lib $LDFLAGS"
-        mkdir build
-        cd build
-        cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
-        make -j3 VERBOSE=1
-    - name: run tests
-      run: |
+        for compiler in gcc clang
+        do
+            if [ "$compiler" = "gcc" ]; then export CC=gcc && export CXX=g++; fi
+            if [ "$compiler" = "clang" ]; then export CC=clang && export CXX=clang++; fi
+            for build_type in Release Debug
+            do
+                for sch in nemesis sherwood distrib
+                do
+                    for topo in hwloc binders no
+                    do
+                        echo "********** Compiler: $compiler, Build type: $build_type, Scheduler: $sch, Topology: $topo **********"
+                        rm -rf build
+                        mkdir build
+                        cd build
+                        cmake -DCMAKE_BUILD_TYPE="$build_type" -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                        make -j4 VERBOSE=1
+                        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
+                        cd ..
+                    done
+                done
+            done
+        done
         # commented example for how to get a backtrace from CI usign lldb on OSX:
         #echo "settings set target.process.stop-on-exec false" > ~/.lldbinit
         #QT_NUM_SHEPHERDS=2 QT_NUM_WORKERS_PER_SHEPHERD=1 lldb bash --batch --one-line 'process launch' --one-line-on-crash 'bt' --one-line-on-crash 'quit' -- test/basics/hello_world
-        cd build
-        CTEST_OUTPUT_ON_FAILURE=1 gtimeout -k 10s --foreground 12m make test VERBOSE=1
-      timeout-minutes: 13
+      timeout-minutes: 60
 
   sanitizers:
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     continue-on-error: true
-    strategy:
-      matrix:
-        sanitizer: [address, memory, thread, undefined]
-        scheduler: [nemesis, sherwood, distrib]
-        topology: [hwloc, binders, no]
-        use_libcxx: [false] # disable testing on libcxx since its effect seems very limited for now.
-        exclude:
-          - sanitizer: memory
-            topology: hwloc
-          - sanitizer: memory
-            topology: binders
-          - sanitizer: thread
-            scheduler: sherwood
-          - sanitizer: thread
-            scheduler: distrib
-          - sanitizer: thread
-            topology: hwloc
-          - sanitizer: thread
-            topology: binders
     env:
       CC: clang-22
       CXX: clang++-22
-      CFLAGS: "-fsanitize=${{ matrix.sanitizer }} -fno-sanitize-recover=all"
-      CXXFLAGS: ${{ matrix.use_libcxx && format('-stdlib=libc++ -fsanitize={0} -fno-sanitize-recover=all', matrix.sanitizer) || format('-fsanitize={0} -fno-sanitize-recover=all', matrix.sanitizer) }}
-      LDFLAGS: "-fsanitize=${{ matrix.sanitizer }} -fno-sanitize-recover=all"
       QTHREAD_STACK_SIZE: 2097152
       ASAN_OPTIONS: "check_initialization_order=1"
     steps:
@@ -349,53 +340,75 @@ jobs:
         # These end up being no-ops in the github actions images.
         apt-get update
         apt-get install -y sudo wget software-properties-common cmake
-    - if:  ${{ ! matrix.use_libcxx }}
-      run: |
+    - run: |
         sudo apt-get install -y gcc-16 g++-16
+    - run: |
+        sudo apt-get install -y hwloc libhwloc-dev
+        hwloc-ls --version
     - name: install compiler
       run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
         # No current LLVM apt repo for 26.04 (resolute racoon) yet, so just pull in the previous version
         sudo apt-add-repository 'deb https://apt.llvm.org/questing/ llvm-toolchain-questing-22 main' && break || sleep 1
         sudo apt-get install -y clang-22
-    - if: ${{ matrix.use_libcxx }}
-      run: sudo apt-get install -y libc++-22-dev libc++abi-22-dev
-    - if: ${{ matrix.topology != 'no' }}
+    - name: build and test
       run: |
-        sudo apt-get install -y hwloc libhwloc-dev
-        hwloc-ls --version
-    - name: build qthreads
-      run: |
+        # thread sanitizer:
+        echo "********** Sanitizer: thread **********"
+        # only test thread sanitizer in the nemesis/no topology config.
+        export CFLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+        export CXXFLAGS="-fsanitize=thread -fno-sanitize-recover=all"
+        export LDFLAGS="-fsanitize=thread -fno-sanitize-recover=all"
         mkdir build
         cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER=nemesis -DQTHREAEDS_TOPOLOGY=no ..
         make -j2 VERBOSE=1
-    - name: run tests
-      run: |
-        cd build
-        if [ "${{ matrix.sanitizer }}" = "thread" ]; then cd test/basics; fi
+        # basic tests only
+        cd test/basics
         CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 18m make test VERBOSE=1
-      timeout-minutes: 19
+        cd ../../..
+        # memory sanitizer:
+        # memory sanitizer doesn't like hwloc, so don't test that config.
+        export CFLAGS="-fsanitize=memory -fno-sanitize-recover=all"
+        export CXXFLAGS="-fsanitize=memory -fno-sanitize-recover=all"
+        export LDFLAGS="-fsanitize=memory -fno-sanitize-recover=all"
+        for sch in nemesis sherwood distrib
+        do
+            echo "********** Sanitizer: memory, Scheduler: $sch **********"
+            rm -rf build
+            mkdir build
+            cd build
+            cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY=no ..
+            make -j2 VERBOSE=1
+            CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 18m make test VERBOSE=1
+            cd ..
+        done
+        for san in address undefined
+        do
+            export CFLAGS="-fsanitize=$san -fno-sanitize-recover=all"
+            export CXXFLAGS="-fsanitize=$san -fno-sanitize-recover=all"
+            export LDFLAGS="-fsanitize=$san -fno-sanitize-recover=all"
+            for sch in nemesis sherwood distrib
+            do
+                for topo in hwloc binders no
+                do
+                    echo "********** Sanitizer: $san, Scheduler: $sch, Topology: $topo **********"
+                    rm -rf build
+                    mkdir build
+                    cd build
+                    cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                    make -j2 VERBOSE=1
+                    CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 18m make test VERBOSE=1
+                    cd ..
+                done
+            done
+        done
+      timeout-minutes: 60
 
   linux-thorough:
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     continue-on-error: true
-    strategy:
-      matrix:
-        compiler: [gcc, clang]
-        scheduler: [nemesis, sherwood, distrib]
-        topology: [hwloc, binders, no]
-        use_libcxx: [false] # disable testing on libcxx since its effect seems very limited for now.
-        build_type: [Release, Debug]
-        exclude:
-          - compiler: gcc
-            use_libcxx: true
-    env:
-      CC: ${{ matrix.compiler == 'gcc' && 'gcc-16' || 'clang-22' }}
-      CXX: ${{ matrix.compiler == 'gcc' && 'g++-16' || 'clang++-22' }}
-      CXXFLAGS: ${{ matrix.use_libcxx && '-stdlib=libc++' || '' }}
-      QTHREADS_ENABLE_ASSERTS: ${{ matrix.use_asserts && '--enable-asserts' || '' }}
     steps:
     - uses: actions/checkout@v6
     - name: container prerequisites
@@ -406,29 +419,39 @@ jobs:
         apt-get install -y sudo wget software-properties-common cmake
     - run: |
         sudo apt-get install -y gcc-16 g++-16
-    - if: ${{ matrix.compiler == 'clang' }}
-      run: |
+    - run: |
+        sudo apt-get install -y hwloc libhwloc-dev
+        hwloc-ls --version
+    - run: |
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
         # No current LLVM apt repo for 26.04 (resolute racoon) yet, so just pull in the previous version
         sudo apt-add-repository 'deb https://apt.llvm.org/questing/ llvm-toolchain-questing-22 main' && break || sleep 1
         sudo apt-get install -y clang-22
-    - if: ${{ matrix.use_libcxx }}
-      run: sudo apt-get install -y libc++-22-dev libc++abi-22-dev
-    - if: ${{ matrix.topology != 'no' }}
+    - name: build and run
       run: |
-        sudo apt-get install -y hwloc libhwloc-dev
-        hwloc-ls --version
-    - name: build qthreads
-      run: |
-        mkdir build
-        cd build
-        cmake -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DQTHREADS_SCHEDULER=${{ matrix.scheduler }} -DQTHREADS_TOPOLOGY=${{ matrix.topology }} ..
-        make -j2 VERBOSE=1
-    - name: run tests
-      run: |
-        cd build
-        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 18m make test VERBOSE=1
-      timeout-minutes: 19
+        for compiler in gcc clang
+        do
+            if [ "$compiler" = "gcc" ]; then export CC=gcc-16 && export CXX=g++-16; fi
+            if [ "$compiler" = "clang" ]; then export CC=clang-22 && export CXX=clang++-22; fi
+            for build_type in Release Debug
+            do
+                for sch in nemesis sherwood distrib
+                do
+                    for topo in hwloc binders no
+                    do
+                        echo "********** Compiler: $compiler, Build type: $build_type, Scheduler: $sch, Topology: $topo **********"
+                        rm -rf build
+                        mkdir build
+                        cd build
+                        cmake -DCMAKE_BUILD_TYPE="$build_type" -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                        make -j2 VERBOSE=1
+                        CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 18m make test VERBOSE=1
+                        cd ..
+                    done
+                done
+            done
+        done
+      timeout-minutes: 60
 
   clang-format:
     runs-on: ubuntu-24.04
