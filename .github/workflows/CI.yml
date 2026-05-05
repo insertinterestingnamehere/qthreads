@@ -324,7 +324,10 @@ jobs:
       timeout-minutes: 60
 
   sanitizers:
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        image: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.image }}
     container: ubuntu:26.04
     continue-on-error: true
     env:
@@ -406,7 +409,10 @@ jobs:
       timeout-minutes: 60
 
   linux-thorough:
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        image: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.image }}
     container: ubuntu:26.04
     continue-on-error: true
     steps:
