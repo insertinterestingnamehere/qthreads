@@ -362,6 +362,39 @@ jobs:
         done
       timeout-minutes: 40
 
+  musl:
+    # The default checkout action doesn't work with alpine/arm64, so for now, only test musl/x86_64.
+    runs-on: ubuntu-24.04
+    container: alpine:latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v6
+    - name: install deps
+      run: |
+        apk add --no-cache --no-progress bash make musl-dev hwloc-dev cmake gcc g++ clang linux-headers
+    - name: build and test
+      run: |
+        for compiler in clang gcc
+        do
+            if [ "$compiler" = "gcc" ]; then export CC=gcc && export CXX=g++; fi
+            if [ "$compiler" = "clang" ]; then export CC=clang && export CXX=clang++; fi
+            for sch in nemesis sherwood distrib
+            do
+                for topo in hwloc binders no
+                do
+                    echo "********** Scheduler: $sch, Topology: $topo **********"
+                    rm -rf build
+                    mkdir build
+                    cd build
+                    cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                    make -j2 VERBOSE=1
+                    CTEST_OUTPUT_ON_FAILURE=1 make test VERBOSE=1
+                    cd ..
+                done
+            done
+        done
+      timeout-minutes: 40
+
   mac:
     continue-on-error: true
     strategy:
