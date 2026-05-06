@@ -320,6 +320,47 @@ jobs:
         done
       timeout-minutes: 50
 
+  nvc:
+    strategy:
+      matrix:
+        image: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.image }}
+    continue-on-error: true
+    env:
+      CC: nvc
+      CXX: nvc++
+    steps:
+    - uses: actions/checkout@v6
+    - name: install deps
+      run: |
+        curl https://developer.download.nvidia.com/hpc-sdk/ubuntu/DEB-GPG-KEY-NVIDIA-HPC-SDK | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-hpcsdk-archive-keyring.gpg
+        export MACHINE_TYPE=`uname -m`
+        if [ ${MACHINE_TYPE} == 'x86_64' ]; then echo 'deb [signed-by=/usr/share/keyrings/nvidia-hpcsdk-archive-keyring.gpg] https://developer.download.nvidia.com/hpc-sdk/ubuntu/amd64 /' | sudo tee /etc/apt/sources.list.d/nvhpc.list; fi
+        if [ ${MACHINE_TYPE} == 'aarch64' ]; then echo 'deb [signed-by=/usr/share/keyrings/nvidia-hpcsdk-archive-keyring.gpg] https://developer.download.nvidia.com/hpc-sdk/ubuntu/arm64 /' | sudo tee /etc/apt/sources.list.d/nvhpc.list; fi
+        sudo apt-get update -y
+        sudo apt-get install -y cmake gcc g++ gfortran hwloc libhwloc-dev
+        sudo apt-get install -y nvhpc-26-1
+    - name: build and test
+      run: |
+        export MACHINE_TYPE=`uname -m`
+        if [ ${MACHINE_TYPE} == 'x86_64' ]; then export PATH="$PATH:/opt/nvidia/hpc_sdk/Linux_x86_64/26.1/compilers/bin"; fi
+        if [ ${MACHINE_TYPE} == 'aarch64' ]; then export PATH="$PATH:/opt/nvidia/hpc_sdk/Linux_aarch64/26.1/compilers/bin"; fi
+        nvc --version
+        for sch in nemesis sherwood distrib
+        do
+            for topo in hwloc binders no
+            do
+                echo "********** Scheduler: $sch, Topology: $topo **********"
+                rm -rf build
+                mkdir build
+                cd build
+                cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                make -j2 VERBOSE=1
+                CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 4m make test VERBOSE=1
+                cd ..
+            done
+        done
+      timeout-minutes: 40
 
   mac:
     continue-on-error: true
