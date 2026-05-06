@@ -276,6 +276,51 @@ jobs:
         done
       timeout-minutes: 40
 
+  arm_acfl:
+    runs-on: ubuntu-22.04-arm
+    continue-on-error: true
+    env:
+      CC: armclang
+      CXX: armclang++
+    steps:
+    - uses: actions/checkout@v6
+    - name: install deps
+      run: |
+        # Set up apt to get a more recent CMake directly from Kitware.
+        # This way it recognizes armclang.
+        wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
+        echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
+        sudo apt-get update -y
+        sudo apt-get install -y cmake
+        sudo apt-get install -y hwloc libhwloc-dev
+        wget -O acfl.tar https://developer.arm.com/-/cdn-downloads/permalink/Arm-Compiler-for-Linux/Version_24.10.1/arm-compiler-for-linux_24.10.1_Ubuntu-22.04_aarch64.tar
+        tar -vxf acfl.tar
+        ./arm-compiler-for-linux_24.10.1_Ubuntu-22.04/arm-compiler-for-linux_24.10.1_Ubuntu-22.04.sh -a -f -s acfl
+        rm acfl.tar
+        sudo apt install -y ./acfl/gcc-14.2.0_Ubuntu-22.04.deb ./acfl/arm-linux-compiler-24.10.1_Ubuntu-22.04.deb
+        rm -rf acfl
+        export PATH=$PATH:/opt/arm/arm-linux-compiler-24.10.1_Ubuntu-22.04/bin
+        armclang -v
+    - name: build and test
+      run: |
+        export PATH=$PATH:/opt/arm/arm-linux-compiler-24.10.1_Ubuntu-22.04/bin
+        for sch in nemesis sherwood distrib
+        do
+            for topo in hwloc binders no
+            do
+                echo "********** Scheduler: $sch, Topology: $topo **********"
+                rm -rf build
+                mkdir build
+                cd build
+                cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                make -j2 VERBOSE=1
+                CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 4m make test VERBOSE=1
+                cd ..
+            done
+        done
+      timeout-minutes: 50
+
+
   mac:
     continue-on-error: true
     strategy:
