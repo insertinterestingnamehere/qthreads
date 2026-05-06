@@ -395,6 +395,31 @@ jobs:
         done
       timeout-minutes: 40
 
+  freebsd:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v6
+    - name: freebsd
+      uses: vmactions/freebsd-vm@v1
+      with:
+        copyback: false
+        release: "15.0"
+        run: |
+          pkg install -y cmake
+          pkg install -y coreutils # to get gtimeout for CI. The built-in timeout sometimes fails to kill the process.
+          for sch in nemesis sherwood distrib
+          do
+              echo "********** Scheduler: $sch **********"
+              rm -rf build
+              mkdir build
+              cd build
+              cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="no" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+              make -j2 VERBOSE=1
+              CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
+              cd ..
+          done
+
   mac:
     continue-on-error: true
     strategy:
