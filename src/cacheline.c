@@ -367,7 +367,7 @@ static void figure_out_cacheline_size(void) {
 int API_FUNC qthread_cacheline(void) {
   if (cacheline_bytes == 0) {
     figure_out_cacheline_size();
-    if (cacheline_bytes == 0) { /* to cache errors in cacheline detection */
+    if (cacheline_bytes <= 0) { /* to catch errors in cacheline detection */
       cacheline_bytes = 128;
     }
   }
