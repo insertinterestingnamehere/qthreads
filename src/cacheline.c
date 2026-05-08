@@ -30,7 +30,13 @@ static unsigned int cpuid() {
 }
 
 static void figure_out_cacheline_size(void) {
+// MUSL doesn't define this macro, so don't use it in that case
+#ifdef _SC_LEVEL1_DCACHE_LINESIZE
   cacheline_bytes = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
+#else
+  // Safe best-guess on current systems.
+  cacheline_bytes = 128;
+#endif
 }
 
 #else
@@ -367,7 +373,7 @@ static void figure_out_cacheline_size(void) {
 int API_FUNC qthread_cacheline(void) {
   if (cacheline_bytes == 0) {
     figure_out_cacheline_size();
-    if (cacheline_bytes == 0) { /* to cache errors in cacheline detection */
+    if (cacheline_bytes <= 0) { /* to catch errors in cacheline detection */
       cacheline_bytes = 128;
     }
   }
