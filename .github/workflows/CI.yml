@@ -504,6 +504,30 @@ jobs:
   #            cd ..
   #        done
 
+  netbsd:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v6
+    - name: netbsd
+      uses: vmactions/netbsd-vm@v1
+      with:
+        copyback: false
+        release: "10.1"
+        run: |
+          pkg_add coreutils cmake
+          for sch in nemesis sherwood distrib
+          do
+              echo "********** Scheduler: $sch **********"
+              rm -rf build
+              mkdir build
+              cd build
+              cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="no" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+              make -j2 VERBOSE=1
+              CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
+              cd ..
+          done
+
   mac:
     continue-on-error: true
     strategy:
