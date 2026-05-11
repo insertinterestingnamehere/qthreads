@@ -215,7 +215,7 @@ while (0)
             (expected),                                                        \
             NULL,                                                              \
             NULL);                                                             \
-    while (0)
+  } while (0)
 #endif
 
 #define qt_wake_all(a)                                                         \
