@@ -193,6 +193,7 @@ while (0)
 #include <sys/futex.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #ifndef NDEBUG
 #define qt_wait_on_address(a, expected)                                        \
