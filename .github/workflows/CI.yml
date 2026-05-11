@@ -276,34 +276,33 @@ jobs:
         done
       timeout-minutes: 40
 
-  arm_acfl:
-    runs-on: ubuntu-22.04-arm
+  arm_atfl:
+    runs-on: ubuntu-24.04-arm
     continue-on-error: true
     env:
       CC: armclang
       CXX: armclang++
     steps:
     - uses: actions/checkout@v6
-    - name: install deps
+    - run: |
+        sudo apt-get install hwloc libhwloc-dev
+        hwloc-ls --version
+    - name: install gcc
       run: |
-        # Set up apt to get a more recent CMake directly from Kitware.
-        # This way it recognizes armclang.
-        wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
-        echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null
-        sudo apt-get update -y
-        sudo apt-get install -y cmake
-        sudo apt-get install -y hwloc libhwloc-dev
-        wget -O acfl.tar https://developer.arm.com/-/cdn-downloads/permalink/Arm-Compiler-for-Linux/Version_24.10.1/arm-compiler-for-linux_24.10.1_Ubuntu-22.04_aarch64.tar
-        tar -vxf acfl.tar
-        ./arm-compiler-for-linux_24.10.1_Ubuntu-22.04/arm-compiler-for-linux_24.10.1_Ubuntu-22.04.sh -a -f -s acfl
-        rm acfl.tar
-        sudo apt install -y ./acfl/gcc-14.2.0_Ubuntu-22.04.deb ./acfl/arm-linux-compiler-24.10.1_Ubuntu-22.04.deb
-        rm -rf acfl
-        export PATH=$PATH:/opt/arm/arm-linux-compiler-24.10.1_Ubuntu-22.04/bin
-        armclang -v
+        sudo apt-get install gcc-14 g++-14
+    - name: install armclang
+      run: |
+        curl "https://developer.arm.com/packages/arm-toolchains:ubuntu-24/noble/Release.key" | sudo gpg --dearmor -o /usr/share/keyrings/obs-oss-arm-com.gpg
+        echo "deb [signed-by=/usr/share/keyrings/obs-oss-arm-com.gpg] https://developer.arm.com/packages/arm-toolchains:ubuntu-24/noble/ ./" | sudo tee /etc/apt/sources.list.d/obs-oss-arm-com.list
+        sudo apt update
+        sudo apt install arm-toolchains-transition
+        sudo apt update
+        sudo apt install arm-toolchain-for-linux
+        export PATH=$PATH:/opt/arm/arm-toolchain-for-linux/bin
+        armclang --version
     - name: build and test
       run: |
-        export PATH=$PATH:/opt/arm/arm-linux-compiler-24.10.1_Ubuntu-22.04/bin
+        export PATH=$PATH:/opt/arm/arm-toolchain-for-linux/bin
         for sch in nemesis sherwood distrib
         do
             for topo in hwloc binders no
@@ -318,7 +317,7 @@ jobs:
                 cd ..
             done
         done
-      timeout-minutes: 50
+      timeout-minutes: 40
 
   nvc:
     strategy:
