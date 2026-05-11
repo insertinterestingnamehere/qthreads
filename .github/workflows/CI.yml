@@ -396,7 +396,7 @@ jobs:
       timeout-minutes: 40
 
   riscv:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
     - uses: actions/checkout@v6
@@ -425,7 +425,7 @@ jobs:
           done
 
   riscv-alpine:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
     - uses: actions/checkout@v6
@@ -452,8 +452,11 @@ jobs:
           done
 
   freebsd:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
+    strategy:
+      matrix:
+        arch: [x86_64, aarch64]
     steps:
     - uses: actions/checkout@v6
     - name: freebsd
@@ -461,7 +464,98 @@ jobs:
       with:
         copyback: false
         release: "15.0"
+        sync: scp
+        arch: ${{ matrix.arch }}
         run: |
+          pkg install -y cmake
+          pkg install -y hwloc2
+          pkg install -y coreutils # to get gtimeout for CI. The built-in timeout sometimes fails to kill the process.
+          # running ARM this way is astonishingly slow, so only do one build config.
+          if [ "${{ matrix.arch }}" = "x86_64" ]
+          then
+              for sch in nemesis sherwood distrib
+              do
+                  for topo in hwloc binders no
+                  do
+                      echo "********** Scheduler: $sch, Topology: $topo **********"
+                      rm -rf build
+                      mkdir build
+                      cd build
+                      cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+                      make -j2 VERBOSE=1
+                      CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
+                      cd ..
+                  done
+              done
+          else
+              mkdir build
+              cd build
+              cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="nemesis" -DQTHREADS_TOPOLOGY="binders" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+              make -j2 VERBOSE=1
+              CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
+              cd ..
+          fi
+
+  #openbsd:
+  #  runs-on: ubuntu-24.04
+  #  continue-on-error: true
+  #  steps:
+  #  - uses: actions/checkout@v6
+  #  - name: openbsd
+  #    uses: vmactions/openbsd-vm@v1
+  #    with:
+  #      copyback: false
+  #      release: "7.8"
+  #      run: |
+  #        pkg_add coreutils cmake
+  #        for sch in nemesis sherwood distrib
+  #        do
+  #            echo "********** Scheduler: $sch **********"
+  #            rm -rf build
+  #            mkdir build
+  #            cd build
+  #            cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+  #            make -j2 VERBOSE=1
+  #            CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
+  #            cd ..
+  #        done
+
+  netbsd:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v6
+    - name: netbsd
+      uses: vmactions/netbsd-vm@v1
+      with:
+        copyback: false
+        release: "10.1"
+        run: |
+          pkg_add coreutils cmake
+          for sch in nemesis sherwood distrib
+          do
+              echo "********** Scheduler: $sch **********"
+              rm -rf build
+              mkdir build
+              cd build
+              cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="no" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+              make -j2 VERBOSE=1
+              CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
+              cd ..
+          done
+
+  dragonflybsd:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v6
+    - name: netbsd
+      uses: vmactions/dragonflybsd-vm@v1
+      with:
+        copyback: false
+        release: "6.4.2"
+        run: |
+          pkg update
           pkg install -y cmake
           pkg install -y hwloc2
           pkg install -y coreutils # to get gtimeout for CI. The built-in timeout sometimes fails to kill the process.

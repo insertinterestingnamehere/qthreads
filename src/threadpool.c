@@ -5,7 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(__STDC_NO_THREADS__)
+#if defined(__STDC_NO_THREADS__) || defined(__OpenBSD__) ||                    \
+  defined(__DragonFly__)
 #define QPOOL_USE_PTHREADS
 #endif
 
