@@ -155,6 +155,34 @@ jobs:
         done
       timeout-minutes: 40
 
+  # A relatively old Linux system that would still be expected to work.
+  linux-old:
+    runs-on: ubuntu-24.04
+    container: rockylinux:8
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v6
+    - run: |
+        dnf install -y gcc gcc-c++ cmake
+        dnf install -y --enablerepo=devel hwloc-devel
+    - name: build and test
+      run: |
+        for sch in nemesis sherwood distrib
+        do
+            for topo in hwloc binders no
+            do
+                echo "********** Scheduler: $sch, Topology: $topo **********"
+                rm -rf build
+                mkdir build
+                cd build
+                cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
+                make -j2 VERBOSE=1
+                CTEST_OUTPUT_ON_FAILURE=1 timeout -k 10s --foreground 12m make test VERBOSE=1
+                cd ..
+            done
+        done
+
+
   linux-icx:
     runs-on: ubuntu-24.04
     continue-on-error: true
