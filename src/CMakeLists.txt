@@ -105,12 +105,9 @@ set_target_properties(
 target_link_libraries(qthread PUBLIC Threads::Threads)
 
 # The c11 threading library has to be linked
-# via a separate library on BSD OSs.
+# via a separate library on FreeBSD-derived OSs.
 if ("${CMAKE_SYSTEM_NAME}" STREQUAL "FreeBSD" OR
-    "${CMAKE_SYSTEM_NAME}" STREQUAL "kFreeBSD" OR
-    "${CMAKE_SYSTEM_NAME}" STREQUAL "OpenBSD" OR
-    "${CMAKE_SYSTEM_NAME}" STREQUAL "NetBSD" OR
-    "${CMAKE_SYSTEM_NAME}" STREQUAL "DragonFly")
+    "${CMAKE_SYSTEM_NAME}" STREQUAL "kFreeBSD")
   target_link_libraries(qthread PUBLIC "stdthreads")
 endif()
 
