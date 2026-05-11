@@ -2,11 +2,13 @@
 #define QT_MACROS_H
 
 // Work around OSX currently refusing to support threads.h
+// OpenBSD and DragonflyBSD also run into this.
 #if 201112L <= __STDC_VERSION__ && __STDC_VERSION__ < 202311L
-#ifndef __STDC_NO_THREADS__
-#include <threads.h>
-#else
+#if defined(__STDC_NO_THREADS__) || defined(__OpenBSD__) ||                    \
+  defined(__DragonFly__)
 #define thread_local _Thread_local
+#else
+#include <threads.h>
 #endif
 #elif __STDC_VERSION__ < 201112L
 #error "C11 is required"
