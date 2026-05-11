@@ -396,7 +396,7 @@ jobs:
       timeout-minutes: 40
 
   riscv:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
     - uses: actions/checkout@v6
@@ -425,7 +425,7 @@ jobs:
           done
 
   riscv-alpine:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
     - uses: actions/checkout@v6
@@ -452,7 +452,7 @@ jobs:
           done
 
   freebsd:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
     - uses: actions/checkout@v6
@@ -481,7 +481,7 @@ jobs:
           done
 
   #openbsd:
-  #  runs-on: ubuntu-latest
+  #  runs-on: ubuntu-24.04
   #  continue-on-error: true
   #  steps:
   #  - uses: actions/checkout@v6
@@ -505,7 +505,7 @@ jobs:
   #        done
 
   netbsd:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
     - uses: actions/checkout@v6
@@ -529,7 +529,7 @@ jobs:
           done
 
   dragonflybsd:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
     - uses: actions/checkout@v6
