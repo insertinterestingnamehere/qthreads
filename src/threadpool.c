@@ -48,7 +48,7 @@ _Thread_local uint32_t context_index;
 unsigned int get_cache_line_size() { return DEFAULT_CACHE_LINE_SIZE; }
 
 // Reserved pointer value to signal pool shutdown.
-#define POOL_END_SIGNAL ((void *)1u)
+#define POOL_END_SIGNAL ((qt_threadpool_func_type)1u)
 
 typedef struct {
   qt_threadpool_func_type func;
@@ -232,7 +232,6 @@ static int pooled_thread_func(void *void_arg) {
 #endif
   pooled_thread_control *control = (pooled_thread_control *)void_arg;
   context_index = atomic_load_explicit(&control->index, memory_order_relaxed);
-  pooled_thread_work current_work;
   for (;;) {
     pooled_thread_work work = worker_wait_for_work(control);
     if unlikely (work.func == POOL_END_SIGNAL) break;
@@ -264,13 +263,14 @@ API_FUNC hw_pool_init_status hw_pool_init(uint32_t num_threads) {
   size_t size = (size_t)num_threads * alignment;
   char *buffer = aligned_alloc(alignment, size);
   hw_pool_init_status retval;
+  uint32_t i = 0u;
   if unlikely (!buffer) {
     retval = POOL_INIT_OUT_OF_MEMORY;
     goto release_pool;
   }
   hw_pool.threads = buffer;
-  int status;
 #ifdef QPOOL_USE_PTHREADS
+  int status;
   pthread_attr_t attr;
   status = pthread_attr_init(&attr);
   if unlikely (status) {
@@ -278,7 +278,6 @@ API_FUNC hw_pool_init_status hw_pool_init(uint32_t num_threads) {
     goto release_buffer;
   }
 #endif
-  uint32_t i = 0u;
   while (i < num_threads) {
     pooled_thread_control *thread_control =
       (pooled_thread_control *)(buffer + alignment * (size_t)i);
@@ -339,8 +338,8 @@ cleanup_threads:
   // No specific label needed for this one since failing immediately after
   // setting up attr is the zero case for the loops.
   pthread_attr_destroy(&attr);
-#endif
 release_buffer:
+#endif
   atomic_store_explicit(&hw_pool.threads, NULL, memory_order_relaxed);
   free(buffer);
 release_pool:
