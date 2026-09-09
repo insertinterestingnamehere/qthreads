@@ -521,11 +521,16 @@ jobs:
   # QEMU fails to start for the aarch64 if we use the ubuntu 26.04 CI image as host.
   # Revisit later. Hopefully it self-resolves with updates from upstream.
   freebsd:
-    runs-on: ubuntu-24.04
-    continue-on-error: true
     strategy:
       matrix:
         arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            host_image: ubuntu-26.04
+          - arch: aarch64
+            host_image: ubuntu-26.04-arm
+    runs-on: ${{ matrix.host_image }}
+    continue-on-error: true
     steps:
     - uses: actions/checkout@v6
     - name: freebsd
