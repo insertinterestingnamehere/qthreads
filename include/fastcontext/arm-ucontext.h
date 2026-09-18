@@ -16,8 +16,7 @@ typedef struct uctxt uctxt_t;
 struct mctxt {
   /* Saved main processor registers. */
 #ifdef NEEDARMA64CONTEXT
-  uint64_t regs[32];     /* callee saves x0-x30, SP */
-  uint64_t fpu_regs[64]; /* 32 128bit FPU/SIMD Neon Registers */
+  uint64_t regs[30];
 #else
   uint32_t regs[16]; /* callee saves r0-r15 */
 #endif
