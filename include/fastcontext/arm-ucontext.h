@@ -20,7 +20,6 @@ struct mctxt {
 #else
   uint32_t regs[16]; /* callee saves r0-r15 */
 #endif
-  char first;
 };
 
 struct uctxt {
