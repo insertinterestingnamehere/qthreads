@@ -16,9 +16,6 @@ struct mctxt {
   /* Saved main processor registers. */
   uint64_t regs[15]; /* callee saves RA, SP and other registers as required */
   uint64_t fpu_regs[12]; /* 12 x 64 bit FPU Registers */
-  char first;
-  char padding[3];
-  uint32_t fcsr;
 };
 
 struct uctxt {
@@ -29,7 +26,9 @@ struct uctxt {
 
   // sigset_t uc_sigmask;
   mctxt_t mc;
+#ifdef USE_SYSTEM_SWAPCONTEXT
   struct uctxt *uc_link; /* unused */
+#endif
 };
 
 int INTERNAL qt_swapctxt(uctxt_t *, uctxt_t *);

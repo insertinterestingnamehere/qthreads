@@ -94,7 +94,6 @@ void INTERNAL qt_makectxt(uctxt_t *ucp, void (*func)(void), int argc, ...) {
 
   ucp->mc.regs[14] = (uintptr_t)func; // LR so that swapcontext returns into it
   ucp->mc.regs[13] = (uintptr_t)top_of_stack; // SP
-  ucp->mc.first = 1;
 }
 
 #elif defined(NEEDARMA64MAKECONTEXT)
@@ -114,9 +113,8 @@ void INTERNAL qt_makectxt(uctxt_t *ucp, void (*func)(void), int argc, ...) {
   for (int i = 0; i < argc; i++) { ucp->mc.regs[i] = va_arg(arg, uint64_t); }
   va_end(arg);
 
-  ucp->mc.regs[30] = (uintptr_t)func; // LR so that swapcontext returns into it
-  ucp->mc.regs[31] = (uintptr_t)top_of_stack; // SP
-  ucp->mc.first = 1;
+  ucp->mc.regs[1] = (uintptr_t)top_of_stack; // SP
+  ucp->mc.regs[3] = (uintptr_t)func; // LR so that swapcontext returns into it
 }
 #elif defined(NEEDRISCVMAKECONTEXT)
 
@@ -139,7 +137,6 @@ void INTERNAL qt_makectxt(uctxt_t *ucp, void (*func)(void), int argc, ...) {
 
   ucp->mc.regs[13U] = (uintptr_t)func; // LR so that swapcontext returns into it
   ucp->mc.regs[14U] = (uintptr_t)top_of_stack; // SP
-  ucp->mc.first = 1;
 }
 
 #endif /* ifdef NEEDPOWERMAKECONTEXT */
