@@ -26,7 +26,9 @@ struct uctxt {
 
   // sigset_t uc_sigmask;
   mctxt_t mc;
+#ifdef USE_SYSTEM_SWAPCONTEXT
   struct uctxt *uc_link; /* unused */
+#endif
 };
 
 int INTERNAL qt_swapctxt(uctxt_t *, uctxt_t *);

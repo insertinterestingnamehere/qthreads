@@ -40,7 +40,9 @@ struct uctxt {
   } uc_stack;
 
   mctxt_t mc;
+#ifdef USE_SYSTEM_SWAPCONTEXT
   struct uctxt *uc_link; /* unused */
+#endif
 };
 
 /* vim:set expandtab: */
