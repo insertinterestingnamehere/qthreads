@@ -7,14 +7,18 @@
 
 #define _(x)
 
-#if defined(__FreeBSD__) &&  __FreeBSD__ < 5
-# if (QTHREAD_ASSEMBLY_ARCH == QTHREAD_IA32)
-#  define NEEDX86CONTEXT 1
-#  define SET qt_setmctxt
-#  define GET qt_getmctxt
-# else
-#  error Unsupported version of FreeBSD
-# endif
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) || defined(__DragonFly__) || defined(__MidnightBSD__)
+#define SET qt_setmctxt
+#define GET qt_getmctxt
+#if (QTHREAD_ASSEMBLY_ARCH == QTHREAD_AMD64)
+#define NEEDX86_64CONTEXT 1
+#elif (QTHREAD_ASSEMBLY_ARCH == QTHREAD_ARMV8_A64)
+#define NEEDARMA64CONTEXT 1
+#elif (QTHREAD_ASSEMBLY_ARCH == QTHREAD_RISCV)
+#define NEEDRISCVCONTEXT 1
+#else
+#error Unsupported architecture on this OS.
+#endif
 #endif
 
 #if defined(__APPLE__)
