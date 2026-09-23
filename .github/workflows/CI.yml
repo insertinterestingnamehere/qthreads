@@ -550,7 +550,7 @@ jobs:
                       rm -rf build
                       mkdir build
                       cd build
-                      cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+                      cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
                       make -j2 VERBOSE=1
                       CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
                       cd ..
@@ -559,7 +559,7 @@ jobs:
           else
               mkdir build
               cd build
-              cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="nemesis" -DQTHREADS_TOPOLOGY="binders" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+              cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="nemesis" -DQTHREADS_TOPOLOGY="binders" ..
               make -j2 VERBOSE=1
               CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
               cd ..
@@ -607,7 +607,7 @@ jobs:
               rm -rf build
               mkdir build
               cd build
-              cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="no" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+              cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="no" ..
               make -j2 VERBOSE=1
               CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
               cd ..
@@ -636,7 +636,7 @@ jobs:
                   rm -rf build
                   mkdir build
                   cd build
-                  cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" -DQTHREADS_CONTEXT_SWAP_IMPL=system ..
+                  cmake -DCMAKE_BUILD_TYPE=Release -DQTHREADS_SCHEDULER="$sch" -DQTHREADS_TOPOLOGY="$topo" ..
                   make -j2 VERBOSE=1
                   CTEST_OUTPUT_ON_FAILURE=1 gtimeout --foreground -k 20s 4m make test VERBOSE=1
                   cd ..
