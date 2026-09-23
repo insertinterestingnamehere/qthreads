@@ -3,6 +3,10 @@
 
 #include <stdatomic.h>
 
+#if __STDC_VERSION__ < 202311L
+#include <stdalign.h>
+#endif
+
 #if defined(__has_feature)
 #if __has_feature(thread_sanitizer)
 #include <sanitizer/tsan_interface.h>
@@ -40,10 +44,16 @@
 
 #define QTHREAD_RET_MASK (QTHREAD_RET_IS_SYNCVAR | QTHREAD_RET_IS_SINC)
 
+#ifdef USE_SYSTEM_SWAPCONTEXT
+#define QT_ALIGN_CONTEXT
+#else
+#define QT_ALIGN_CONTEXT alignas(16)
+#endif
+
 struct qthread_runtime_data_s {
-  void *stack;                          /* the thread's stack */
-  qt_context_t context;                 /* the context switch info */
-  qt_context_t *_Atomic return_context; /* context of parent shepherd */
+  void *stack;                           /* the thread's stack */
+  qt_context_t *_Atomic return_context;  /* context of parent shepherd */
+  QT_ALIGN_CONTEXT qt_context_t context; /* the context switch info */
 
   /* a pointer used for passing information back to the shepherd when
    * context swapping */
